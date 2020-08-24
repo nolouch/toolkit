@@ -1,0 +1,87 @@
+apiVersion: pingcap.com/v1alpha1
+kind: TidbCluster
+metadata:
+  name: test
+spec:
+  version: latest
+  timezone: UTC
+  enableTLSCluster: false
+  pvReclaimPolicy: Delete
+  enableAdvertiseAddress: true
+  autoFailover: false
+  configUpdateStrategy: RollingUpdate 
+  tolerations:
+    - key: "dedicated"
+      operator: "Equal"
+      value: "pd"
+      effect: "NoSchedule"
+  pd:
+    baseImage: hub.pingcap.net/csn/pd
+    version: master-0870b1d
+    replicas: 1
+    service:
+      type: NodePort
+    storageClassName: shared-nvme-disks
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+    requests:
+      cpu: 4000m
+      memory: 8Gi
+      storage: 200Gi
+    config:
+      log-level: "info"
+      location-labels: "test"
+
+  tikv:
+    env: 
+    - name: MALLOC_CONF
+      value: "prof_leak:true,lg_prof_sample:0,prof_final:true"
+    baseImage: hub.pingcap.net/csn/tikv
+    version: master-a4f38fb
+    replicas: 3
+    storageClassName: shared-nvme-disks
+    maxFailoverCount: 0
+    limits:
+      cpu: 16000m
+      memory: 24Gi
+      storage: 3000Gi
+    requests:
+      cpu: 10000m
+      memory: 16Gi
+      storage: 3000Gi
+    config:
+      log-level: "info"
+      status-addr: "0.0.0.0:20180"
+      storage:
+        block-cache:
+          capacity: "14GB"
+          shared: true
+      raftstore:
+        pd-heartbeat-tick-interval: "60s"
+        raft-max-inflight-msgs: 8912
+        perf-level: 5
+        hibernate-regions: false
+
+  tidb:
+    baseImage: hub.pingcap.net/csn/tidb
+    version: master-6ccd824
+    replicas: 1
+    maxFailoverCount: 0
+    enableAdvertiseAddress: true
+    service:
+      type: ClusterIP
+    config:
+      token-limit: 1000000
+      log-level: "info"
+      prepared_plan_cache:
+        enabled: true
+      experimental:
+        allow-auto-random: true
+    limits:
+      cpu: 16000m
+      memory: 8Gi
+    requests:
+      cpu: 16000m
+      memory: 8Gi
+
