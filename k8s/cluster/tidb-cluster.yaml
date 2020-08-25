@@ -26,7 +26,7 @@ spec:
       cpu: 4000m
       memory: 8Gi
     requests:
-      cpu: 4000m
+      cpu: 2000m
       memory: 8Gi
       storage: 200Gi
     config:
@@ -43,11 +43,11 @@ spec:
     storageClassName: shared-nvme-disks
     maxFailoverCount: 0
     limits:
-      cpu: 16000m
+      cpu: 8000m
       memory: 24Gi
       storage: 3000Gi
     requests:
-      cpu: 10000m
+      cpu: 2000m
       memory: 16Gi
       storage: 3000Gi
     config:
@@ -79,9 +79,9 @@ spec:
       experimental:
         allow-auto-random: true
     limits:
-      cpu: 16000m
+      cpu: 4000m
       memory: 8Gi
     requests:
-      cpu: 16000m
+      cpu: 2000m
       memory: 8Gi
 
