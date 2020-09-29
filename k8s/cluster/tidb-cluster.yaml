@@ -10,11 +10,6 @@ spec:
   enableAdvertiseAddress: true
   autoFailover: false
   configUpdateStrategy: RollingUpdate 
-  tolerations:
-    - key: "dedicated"
-      operator: "Equal"
-      value: "pd"
-      effect: "NoSchedule"
   pd:
     baseImage: hub.pingcap.net/csn/pd
     version: master-0870b1d
