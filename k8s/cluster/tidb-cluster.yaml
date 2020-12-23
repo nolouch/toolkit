@@ -2,6 +2,7 @@ apiVersion: pingcap.com/v1alpha1
 kind: TidbCluster
 metadata:
   name: test
+  namespace: pd-team
 spec:
   version: latest
   timezone: UTC
@@ -9,74 +10,102 @@ spec:
   pvReclaimPolicy: Delete
   enableAdvertiseAddress: true
   autoFailover: false
-  configUpdateStrategy: RollingUpdate 
+  configUpdateStrategy: RollingUpdate
   pd:
     baseImage: hub.pingcap.net/csn/pd
-    version: master-0870b1d
+    version: 5.0-rc-c268837
     replicas: 1
     service:
       type: NodePort
     storageClassName: shared-nvme-disks
     limits:
-      cpu: 4000m
+      cpu: 6000m
       memory: 8Gi
     requests:
-      cpu: 2000m
+      cpu: 6000m
       memory: 8Gi
       storage: 200Gi
     config:
-      log-level: "info"
-      location-labels: "test"
-
+      log:
+        level: "info"
+        file:
+          filename: /var/log/pdlog/pd.log
+      dashboard:
+        enable-telemetry: false
+        enable-experimental: true
+    storageVolumes:
+      - name: log
+        storageSize: "20Gi"
+        mountPath: "/var/log/pdlog"
   tikv:
-    env: 
-    - name: MALLOC_CONF
-      value: "prof_leak:true,lg_prof_sample:0,prof_final:true"
+    env:
+      - name: TEST_TIKV_TAGS
+        value: "test_need_restart"
     baseImage: hub.pingcap.net/csn/tikv
-    version: master-a4f38fb
+    version: 5.0-rc-2-1142bc4
     replicas: 3
-    storageClassName: shared-nvme-disks
+    storageClassName: nvme-disks
     maxFailoverCount: 0
+    evictLeaderTimeout: 1h
     limits:
       cpu: 8000m
-      memory: 24Gi
-      storage: 3000Gi
+      memory: 20Gi
+      storage: 500Gi
     requests:
-      cpu: 2000m
-      memory: 16Gi
-      storage: 3000Gi
-    config:
-      log-level: "info"
-      status-addr: "0.0.0.0:20180"
-      storage:
-        block-cache:
-          capacity: "14GB"
-          shared: true
-      raftstore:
-        pd-heartbeat-tick-interval: "60s"
-        raft-max-inflight-msgs: 8912
-        perf-level: 5
-        hibernate-regions: false
+      cpu: 8000m
+      memory: 20Gi
+      storage: 1000Gi
+    storageVolumes:
+      - name: log
+        storageClassName: shared-nvme-disks
+        storageSize: "20Gi"
+        mountPath: "/var/log/tikvlog"
+    config: |
+      log-level = "info"
+      log-file = "/var/log/tikvlog/tikv.log"
+      status-addr = "0.0.0.0:20180"
+      [rocksdb]
+        max-background-jobs = 6
+        max-sub-compactions = 3
+      [storage.block-cache]
+        capacity = "14GB"
+        shared = true
+      [raftstore]
+        raft-max-inflight-msgs = 8912
+        perf-level = 5
+      [readpool.unified]
+        min_thread-count = 1
+        max-thread-count = 5
+      [gc]
+        enable-compaction-filter = true
+        compaction-filter-skip-version-check = true
 
   tidb:
     baseImage: hub.pingcap.net/csn/tidb
-    version: master-6ccd824
-    replicas: 1
+    version: 5.0-rc-1a9852f
+    replicas: 2
     maxFailoverCount: 0
     enableAdvertiseAddress: true
     service:
       type: ClusterIP
+    storageClassName: shared-nvme-disks
+    limits:
+      cpu: 8000m
+      memory: 24Gi
+    requests:
+      cpu: 8000m
+      memory: 24Gi
     config:
       token-limit: 1000000
-      log-level: "info"
-      prepared_plan_cache:
+      prepared-plan-cache:
         enabled: true
       experimental:
         allow-auto-random: true
-    limits:
-      cpu: 4000m
-      memory: 8Gi
-    requests:
-      cpu: 2000m
-      memory: 8Gi
-
+      log:
+        level: "info"
+        file:
+          filename: /var/log/tidblog/tidb.log
+    storageVolumes:
+      - name: log
+        storageSize: "20Gi"
+        mountPath: "/var/log/tidblog"
