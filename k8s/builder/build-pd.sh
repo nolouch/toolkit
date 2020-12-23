@@ -16,7 +16,7 @@ while getopts 'n:p:u:h' OPT; do
 	case $OPT in
 		n) IMAGE_NAME="$OPTARG";;
 		p) FILE_PATH="$OPTARG";;
-		u) HUT_PATH="$OPTARG";;
+		u) HUB_PATH="$OPTARG";;
 		h) help;;
 		?) help;;
 	esac
