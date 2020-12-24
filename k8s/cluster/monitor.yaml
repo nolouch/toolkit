@@ -4,6 +4,9 @@ metadata:
   name: monitor
   namespace: pd-team
 spec:
+  persistent: true
+  storageClassName: shared-nvme-disks
+  storage: 20G
   clusters:
     - name: test
       namespace: pd-team
@@ -14,14 +17,13 @@ spec:
       type: NodePort
   grafana:
     baseImage: grafana/grafana
-    version: 6.0.1
+    version: "7.3.4"
     service:
       type: NodePort
   initializer:
     baseImage: pingcap/tidb-monitor-initializer
-    version: v3.0.5
+    version: v4.0.8
   reloader:
     baseImage: pingcap/tidb-monitor-reloader
     version: v1.0.1
   imagePullPolicy: IfNotPresent
-
