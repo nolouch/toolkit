@@ -5,14 +5,14 @@ metadata:
   namespace: pd-team
 spec:
   persistent: true
-  storageClassName: shared-nvme-disks
-  storage: 20G
+  storageClassName: shared-sas-disks
+  storage: 40G
   clusters:
     - name: test
       namespace: pd-team
   prometheus:
     baseImage: prom/prometheus
-    version: v2.11.1
+    version: v2.18.1
     service:
       type: NodePort
   grafana:
