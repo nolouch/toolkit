@@ -13,7 +13,7 @@ spec:
   configUpdateStrategy: RollingUpdate
   pd:
     baseImage: hub.pingcap.net/csn/pd
-    version: 5.0-rc-c268837
+    version: 5.0-hot-4a98c86
     replicas: 1
     service:
       type: NodePort
@@ -35,6 +35,7 @@ spec:
         enable-experimental: true
     storageVolumes:
       - name: log
+        storageClassName: shared-sas-disks
         storageSize: "20Gi"
         mountPath: "/var/log/pdlog"
   tikv:
@@ -54,10 +55,10 @@ spec:
     requests:
       cpu: 8000m
       memory: 20Gi
-      storage: 1000Gi
+      storage: 500Gi
     storageVolumes:
       - name: log
-        storageClassName: shared-nvme-disks
+        storageClassName: shared-sas-disks
         storageSize: "20Gi"
         mountPath: "/var/log/tikvlog"
     config: |
@@ -71,6 +72,8 @@ spec:
         capacity = "14GB"
         shared = true
       [raftstore]
+        capacity = "500GB"
+        leader-transfer-max-log-lag = 256
         raft-max-inflight-msgs = 8912
         perf-level = 5
       [readpool.unified]
@@ -88,7 +91,7 @@ spec:
     enableAdvertiseAddress: true
     service:
       type: ClusterIP
-    storageClassName: shared-nvme-disks
+    storageClassName: shared-sas-disks
     limits:
       cpu: 8000m
       memory: 24Gi
@@ -107,5 +110,6 @@ spec:
           filename: /var/log/tidblog/tidb.log
     storageVolumes:
       - name: log
+        storageClassName: shared-sas-disks
         storageSize: "20Gi"
         mountPath: "/var/log/tidblog"
