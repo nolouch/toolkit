@@ -30,7 +30,7 @@ IMAGE="hub.pingcap.net/$HUB_PATH:$IMAGE_NAME-$HASH"
 echo "##### Building Docker image ${IMAGE}#####"
 dockerFile=$(cat << EOF 
 FROM pingcap/rust
-COPY bin/tikv-server /tikv-server
+COPY $FILE_PATH /tikv-server
 WORKDIR /
 EXPOSE 20160
 ENTRYPOINT ["/tikv-server"]
