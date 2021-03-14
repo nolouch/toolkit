@@ -1,13 +1,13 @@
 #!/bin/bash
 set -e
 help() {
-	echo "Usage:"
-	echo "offline_az.sh -p PD_ADDR -k LABEL_KEY -v LABEL_VALUE"
-	echo "Options:"
-	echo "  -p, PD_ADDR is the address of the pd. default: http://127.0.0.1:2379"
+    echo "Usage:"
+    echo "offline_az.sh -p PD_ADDR -k LABEL_KEY -v LABEL_VALUE"
+    echo "Options:"
+    echo "  -p, PD_ADDR is the address of the pd. default: http://127.0.0.1:2379"
     echo "  -k, LABEL_KEY is the key of the host's label, default: \"\""
     echo "  -v, LABEL_VALUE is the value of the label, default: \"\""
-	exit -1
+    exit -1
 }
 
 PD_ADDR="http://127.0.0.1:2379"

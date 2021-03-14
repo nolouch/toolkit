@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 help() {
-	echo "Usage:"
-	echo "offline_az.sh -p PD_ADDR -k LABEL_KEY -v LABEL_VALUE"
-	echo "Options:"
-	echo "  -p, PD_ADDR is the address of the pd. default: http://127.0.0.1:2379"
-	echo "  -n, CLUSTER_NAME is the name of the cluster. default: \"\""
+    echo "Usage:"
+    echo "offline_az.sh -p PD_ADDR -k LABEL_KEY -v LABEL_VALUE"
+    echo "Options:"
+    echo "  -p, PD_ADDR is the address of the pd. default: http://127.0.0.1:2379"
+    echo "  -n, CLUSTER_NAME is the name of the cluster. default: \"\""
     echo "  -k, LABEL_KEY is the key of the host's label, default: \"\""
     echo "  -v, LABEL_VALUE is the value of the label, default: \"\""
-	exit -1
+    exit -1
 }
 
 PD_ADDR="http://127.0.0.1:2379"
@@ -47,7 +47,6 @@ do
 	    tiup cluster stop $CLUSTER_NAME -N $STORE_ADDR >> /tmp/up_az.log
 		DATA_DIR=$(tiup cluster display csn-test -N ${STORE_ADDRS[$i]}|grep tikv|awk '{print $7}')
 		HOST=$(tiup cluster display csn-test -N ${STORE_ADDRS[$i]}|grep tikv|awk '{print $3}')
-		curl -X POST "$PD_ADDR/pd/api/v1/store/$STORE_ID/state?state=Tombstone" >> /tmp/up_az.log
 		echo "clean the data of the store ${STORE_IDS[$i]}[$HOST:$DATA_DIR]" 
 		tiup cluster exec $CLUSTER_NAME -N $HOST --command "rm -rf $DATA_DIR" >> /tmp/up_az.log
 		tiup cluster start $CLUSTER_NAME -N ${STORE_ADDRS[$i]} &>> /tmp/up_az.log
