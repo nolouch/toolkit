@@ -38,20 +38,20 @@ SKIPED_STORES=()
 
 for i in ${!STORE_IDS[@]}
 do
-	STORE_ID=${STORE_IDS[$i]}
-	STORE_ADDR=${STORE_ADDRS[$i]}
+    STORE_ID=${STORE_IDS[$i]}
+    STORE_ADDR=${STORE_ADDRS[$i]}
     # clean input
     read -t 1 -n 10000 discard || true
     read -n 1 -p "recover the store $STORE_ID, address: $STORE_ADDR (y/n)" action
     printf "\n"
     if [ "$action" != "${action#[Yy]}" ] ;then
         echo "  - recovering $STORE_ID, addres: $STORE_ADDR"
-		if  [ ${STORE_StateS[$i]} == "Up" ]; then
+        if  [ ${STORE_StateS[$i]} == "Up" ]; then
             echo "  - the store $STORE_ID already up"
-			continue
-		fi
-		DATA_DIR=$(echo "$DEPLOY_DETAILS"|grep "$STORE_ADDR"|awk '{print $7}')
-		HOST=$(echo "$DEPLOY_DETAILS"|grep tikv|grep "$STORE_ADDR"|awk '{print $3}')
+            continue
+        fi
+        DATA_DIR=$(echo "$DEPLOY_DETAILS"|grep "$STORE_ADDR"|awk '{print $7}')
+        HOST=$(echo "$DEPLOY_DETAILS"|grep tikv|grep "$STORE_ADDR"|awk '{print $3}')
         dir_count=$(echo "$DEPLOY_DETAILS"|grep "$DATA_DIR"|wc -l)
         state=$(echo "$DEPLOY_DETAILS"|grep "$DATA_DIR"|awk '{print $6}')
         if [ $dir_count -gt 1 ] ; then
@@ -64,14 +64,14 @@ do
             SKIPED_STORES+=("$STORE_ID")
             if [ "$state" != "Up" ] ; then
                 echo "  - [warn] start the $state store $STORE_ID with same data directory. path: [$HOST:$DATA_DIR]"
-		        tiup cluster start $CLUSTER_NAME -N ${STORE_ADDRS[$i]} &>> /tmp/up_az.log
+                tiup cluster start $CLUSTER_NAME -N ${STORE_ADDRS[$i]} &>> /tmp/up_az.log
             fi
             continue
         fi
-	    tiup cluster stop $CLUSTER_NAME -N $STORE_ADDR >> /tmp/up_az.log
-		echo "  - clean the data of the store $STORE_ID path: [$HOST:$DATA_DIR]" 
-		tiup cluster exec $CLUSTER_NAME -N $HOST --command "rm -rf $DATA_DIR" >> /tmp/up_az.log
-		tiup cluster start $CLUSTER_NAME -N ${STORE_ADDRS[$i]} &>> /tmp/up_az.log
+        tiup cluster stop $CLUSTER_NAME -N $STORE_ADDR >> /tmp/up_az.log
+        echo "  - clean the data of the store $STORE_ID path: [$HOST:$DATA_DIR]" 
+        tiup cluster exec $CLUSTER_NAME -N $HOST --command "rm -rf $DATA_DIR" >> /tmp/up_az.log
+        tiup cluster start $CLUSTER_NAME -N ${STORE_ADDRS[$i]} &>> /tmp/up_az.log
         echo "  - started the store"
     else
         SKIPED_STORES+=("$STORE_ID")
