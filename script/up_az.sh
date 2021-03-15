@@ -97,7 +97,8 @@ read -t 1 -n 10000 discard || true
 read -n 1 -p "prune the tombstone stores (y/n)" action
 printf "\n"
 if [ "$action" != "${action#[Yy]}" ] ;then
-    tiup cluster prune $CLUSTER_NAME >> /tmp/up_az.log
+    tiup ctl pd -u  $PD_ADDR store remove-tombstone >> /tmp/up_az.log
+    echo "clean all tombstones in pd"
 fi
 
 echo "Finished, Detail log in: /tmp/up_az.log"
