@@ -32,7 +32,7 @@ done
 STORE_RAW_DATA=$(curl -sl "$PD_ADDR/pd/api/v1/stores?state=1&state=0&state=2"  | jq "{stores: [.stores[] | {id: .store.id, address: .store.address,  state_name: .store.state_name,  label_key: .store.labels[]?|select(.key == \"$LABEL_KEY\" and .value == \"$LABEL_VALUE\")}]}")
 STORE_IDS=($(echo $STORE_RAW_DATA| jq ".stores[]|.id"))
 STORE_ADDRS=($(echo $STORE_RAW_DATA| jq -r ".stores[]|.address"))
-STORE_StateS=($(echo $STORE_RAW_DATA| jq ".stores[]|.state_name"))
+STORE_STATES=($(echo $STORE_RAW_DATA| jq ".stores[]|.state_name"))
 DEPLOY_DETAILS=$(tiup cluster display $CLUSTER_NAME -R tikv)
 SKIPED_STORES=()
 
@@ -46,7 +46,7 @@ do
     printf "\n"
     if [ "$action" != "${action#[Yy]}" ] ;then
         echo "  - recovering $STORE_ID, addres: $STORE_ADDR"
-        if  [ ${STORE_StateS[$i]} == "Up" ]; then
+        if  [ ${STORE_STATES[$i]} == "Up" ]; then
             echo "  - the store $STORE_ID already up"
             continue
         fi
