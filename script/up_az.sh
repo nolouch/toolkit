@@ -68,9 +68,12 @@ do
             fi
             continue
         fi
+        # recovering steps, stop -> clean -> start
         tiup cluster stop $CLUSTER_NAME -N $STORE_ADDR >> /tmp/up_az.log
-        echo "  - clean the data of the store $STORE_ID path: [$HOST:$DATA_DIR]" 
-        tiup cluster exec $CLUSTER_NAME -N $HOST --command "rm -rf $DATA_DIR" >> /tmp/up_az.log
+        if [ -n "$DATA_DIR" ] && [ "$DATA_DIR" != "/" ]; then
+            echo "  - clean the data of the store $STORE_ID path: [$HOST:$DATA_DIR]" 
+            tiup cluster exec $CLUSTER_NAME -N $HOST --command "rm -rf $DATA_DIR" >> /tmp/up_az.log
+        fi 
         tiup cluster start $CLUSTER_NAME -N ${STORE_ADDRS[$i]} &>> /tmp/up_az.log
         echo "  - started the store"
     else
@@ -80,6 +83,7 @@ do
 done
 echo "Finished, and skiped stores $SKIPED_STORES"
 
+# reset the replicas numbers and schedule limit
 read -t 1 -n 10000 discard || true
 read -n 1 -p "set replicas number to 5 (y/n)" action
 printf "\n"
@@ -93,6 +97,7 @@ else
 fi
 
 
+# remove all tombstone stores
 read -t 1 -n 10000 discard || true
 read -n 1 -p "prune the tombstone stores (y/n)" action
 printf "\n"
