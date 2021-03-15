@@ -52,7 +52,7 @@ Options:
 
 例如：
 ```
-./offline_az.sh -p http://172.16.4.6:5379 -k zone -v az_bj
+./up_az.sh -p http://172.16.4.6:5379 -k zone -v az_bj
 ```
 
 **NOTE**: 请按照提示核对需要下线节点是否正确
