@@ -52,7 +52,7 @@ read -t 1 -n 10000 discard || true
 read -n 1 -p "Set Replicas number to 3 (y/n)" action
 printf "\n"
 if [ "$action" != "${action#[Yy]}" ] ;then
-   tiup ctl pd -u $PD_ADDR config set max-replicas 2 >> /tmp/offline_az.log
+   tiup ctl pd -u $PD_ADDR config set max-replicas 3 >> /tmp/offline_az.log
    echo "set replicas number to 3"
    tiup ctl pd -u $PD_ADDR config set replica-schedule-limit 1000  >> /tmp/offline_az.log
    echo "set replica-schedule-limit to 1000"

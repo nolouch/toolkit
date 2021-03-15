@@ -82,8 +82,9 @@ echo "Finished, and skiped stores $SKIPED_STORES"
 
 read -t 1 -n 10000 discard || true
 read -n 1 -p "set replicas number to 5 (y/n)" action
+printf "\n"
 if [ "$action" != "${action#[Yy]}" ] ;then
-   tiup ctl pd -u $PD_ADDR config set max-replicas 3 >> /tmp/up_az.log
+   tiup ctl pd -u $PD_ADDR config set max-replicas 5 >> /tmp/up_az.log
    echo "set replicas number to 5"
    tiup ctl pd -u $PD_ADDR config set replica-schedule-limit 64 >> /tmp/up_az.log
    echo "set replica-schedule-limit to 64"
@@ -93,7 +94,8 @@ fi
 
 
 read -t 1 -n 10000 discard || true
-read -n 1 -p "set replicas number to 5 (y/n)" action
+read -n 1 -p "prune the tombstone stores (y/n)" action
+printf "\n"
 if [ "$action" != "${action#[Yy]}" ] ;then
     tiup cluster prune $CLUSTER_NAME >> /tmp/up_az.log
 fi
