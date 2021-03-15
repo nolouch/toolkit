@@ -54,10 +54,8 @@ printf "\n"
 if [ "$action" != "${action#[Yy]}" ] ;then
    tiup ctl pd -u $PD_ADDR config set max-replicas 3 >> /tmp/offline_az.log
    echo "set replicas number to 3"
-   tiup ctl pd -u $PD_ADDR config set replica-schedule-limit 1000  >> /tmp/offline_az.log
-   echo "set replica-schedule-limit to 1000"
 else
-    echo "Skip..."
+   echo "Skip..."
 fi
 
 echo "Finished, Detail log in: /tmp/offline_az.log"
