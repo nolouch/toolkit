@@ -17,7 +17,7 @@ spec:
       type: NodePort
   grafana:
     baseImage: grafana/grafana
-    version: "7.3.4"
+    version: "7.3.5"
     service:
       type: NodePort
   initializer:
