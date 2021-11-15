@@ -25,7 +25,7 @@ done
 [ ! -n "$IMAGE_NAME" ] && help
 
 HASH=$($FILE_PATH --version |grep Hash| cut -c20-26)
-IMAGE="hub.pingcap.net/$HUB_PATH:$IMAGE_NAME-$HASH"
+IMAGE="hub-new.pingcap.net/$HUB_PATH:$IMAGE_NAME-$HASH"
 
 echo "##### Building Docker image ${IMAGE}#####"
 dockerFile=$(cat << EOF 
