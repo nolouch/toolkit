@@ -2,14 +2,14 @@ apiVersion: pingcap.com/v1alpha1
 kind: TidbMonitor
 metadata:
   name: monitor
-  namespace: pd-team
+  namespace: csn
 spec:
   persistent: true
   storageClassName: shared-sas-disks
-  storage: 40G
+  storage: 20G
   clusters:
-    - name: test
-      namespace: pd-team
+    - name: my-test
+      namespace: csn
   prometheus:
     baseImage: prom/prometheus
     version: v2.18.1
@@ -17,12 +17,12 @@ spec:
       type: NodePort
   grafana:
     baseImage: grafana/grafana
-    version: "7.3.5"
+    version: "9.0.1"
     service:
       type: NodePort
   initializer:
     baseImage: pingcap/tidb-monitor-initializer
-    version: v4.0.8
+    version: v6.1.0
   reloader:
     baseImage: pingcap/tidb-monitor-reloader
     version: v1.0.1

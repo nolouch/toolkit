@@ -1,8 +1,8 @@
 apiVersion: pingcap.com/v1alpha1
 kind: TidbCluster
 metadata:
-  name: test
-  namespace: pd-team
+  name: my-test
+  namespace: csn
 spec:
   version: latest
   timezone: UTC
@@ -12,17 +12,17 @@ spec:
   autoFailover: false
   configUpdateStrategy: RollingUpdate
   pd:
-    baseImage: hub.pingcap.net/csn/pd
-    version: 5.0-hot-4a98c86
+    baseImage: hub-new.pingcap.net/csn/pd
+    version: multi-tenant-3320891
     replicas: 1
     service:
       type: NodePort
-    storageClassName: shared-nvme-disks
+    storageClassName: pd-nvme-disks
     limits:
-      cpu: 6000m
+      cpu: 4000m
       memory: 8Gi
     requests:
-      cpu: 6000m
+      cpu: 4000m
       memory: 8Gi
       storage: 200Gi
     config:
@@ -42,8 +42,8 @@ spec:
     env:
       - name: TEST_TIKV_TAGS
         value: "test_need_restart"
-    baseImage: hub.pingcap.net/csn/tikv
-    version: 5.0-rc-2-1142bc4
+    baseImage: hub-new.pingcap.net/csn/tikv
+    version: multi-tenant-1-69937fb
     replicas: 3
     storageClassName: nvme-disks
     maxFailoverCount: 0
@@ -65,27 +65,10 @@ spec:
       log-level = "info"
       log-file = "/var/log/tikvlog/tikv.log"
       status-addr = "0.0.0.0:20180"
-      [rocksdb]
-        max-background-jobs = 6
-        max-sub-compactions = 3
-      [storage.block-cache]
-        capacity = "14GB"
-        shared = true
-      [raftstore]
-        capacity = "500GB"
-        leader-transfer-max-log-lag = 256
-        raft-max-inflight-msgs = 8912
-        perf-level = 5
-      [readpool.unified]
-        min_thread-count = 1
-        max-thread-count = 5
-      [gc]
-        enable-compaction-filter = true
-        compaction-filter-skip-version-check = true
 
   tidb:
     baseImage: hub.pingcap.net/csn/tidb
-    version: 5.0-rc-1a9852f
+    version: multi-tenants-n2-f851dae
     replicas: 2
     maxFailoverCount: 0
     enableAdvertiseAddress: true
@@ -94,20 +77,18 @@ spec:
     storageClassName: shared-sas-disks
     limits:
       cpu: 8000m
-      memory: 24Gi
+      memory: 16Gi
     requests:
       cpu: 8000m
-      memory: 24Gi
-    config:
-      token-limit: 1000000
-      prepared-plan-cache:
-        enabled: true
-      experimental:
-        allow-auto-random: true
-      log:
-        level: "info"
-        file:
-          filename: /var/log/tidblog/tidb.log
+      memory: 16Gi
+    config: |
+      token-limit = 1000000
+      [prepared-plan-cache]
+        enabled = true
+      [log]
+        level = "info"
+      [log.file]
+        filename = "/var/log/tidblog/tidb.log"
     storageVolumes:
       - name: log
         storageClassName: shared-sas-disks
