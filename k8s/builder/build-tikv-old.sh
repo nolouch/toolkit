@@ -29,12 +29,10 @@ IMAGE="hub-new.pingcap.net/$HUB_PATH:$IMAGE_NAME-$HASH"
 
 echo "##### Building Docker image ${IMAGE}#####"
 dockerFile=$(cat << EOF 
-FROM pingcap/alpine-glibc
+FROM pingcap/rust
 COPY $FILE_PATH /tikv-server
-RUN apk add --no-cache \
-    curl libstdc++
 WORKDIR /
-EXPOSE 20160 20180
+EXPOSE 20160
 ENTRYPOINT ["/tikv-server"]
 EOF
 )
