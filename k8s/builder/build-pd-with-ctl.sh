@@ -31,7 +31,7 @@ IMAGE="hub-new.pingcap.net/$HUB_PATH:$IMAGE_NAME-$HASH"
 
 echo "##### Building Docker image ${IMAGE}#####"
 dockerFile=$(cat << EOF 
-FROM hub-new.pingcap.net/pingcap/alpine-glibc
+FROM pingcap/alpine-glibc
 COPY $FILE_PATH /pd-server
 COPY $CTL_PATH /pd-ctl
 WORKDIR /
