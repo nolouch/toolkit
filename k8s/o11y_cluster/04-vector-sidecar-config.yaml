@@ -1,0 +1,109 @@
+# Vector Sidecar ConfigMap
+# 用于收集 TiDB 的 statement log 和 slow log 到 MinIO
+#
+# IDC 环境:
+#   Namespace: csn-testbed-tps-8002348-1-156
+#   日志目录: /var/log/auditlog (通过 storageVolumes 创建的 tidb-slowlog volume)
+#   - tidb-statements.log: statement 日志
+#   - slowlog: 慢查询日志
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-sidecar-config
+  namespace: csn-testbed-tps-8002348-1-156
+data:
+  vector.toml: |
+    data_dir = "/vector-data-dir"
+
+    [api]
+    enabled = true
+    address = "0.0.0.0:8686"
+
+    # 读取 Statement 日志
+    [sources.statement_log]
+    type = "file"
+    include = ["/var/log/auditlog/tidb-statements.log"]
+    read_from = "end"
+    ignore_older_secs = 86400
+
+    # 读取慢查询日志（多行合并）
+    [sources.slow_log]
+    type = "file"
+    include = ["/var/log/auditlog/slowlog*", "/var/log/auditlog/tidb-slow*.log"]
+    read_from = "end"
+    ignore_older_secs = 86400
+    multiline.start_pattern = "^# Time:"
+    multiline.mode = "halt_before"
+    multiline.condition_pattern = "^# Time:"
+    multiline.timeout_ms = 2000
+
+    # 添加元数据 - Statement Log
+    [transforms.enrich_statement_log]
+    type = "remap"
+    inputs = ["statement_log"]
+    source = '''
+    .cluster_id = "tc"
+    .pod_name = get_env_var!("POD_NAME")
+    .namespace = get_env_var!("NAMESPACE")
+    .log_type = "statement"
+    .component = "tidb"
+    '''
+
+    # 添加元数据 - Slow Log
+    [transforms.enrich_slow_log]
+    type = "remap"
+    inputs = ["slow_log"]
+    source = '''
+    .cluster_id = "tc"
+    .pod_name = get_env_var!("POD_NAME")
+    .namespace = get_env_var!("NAMESPACE")
+    .log_type = "slowlog"
+    .component = "tidb"
+    '''
+
+    # Statement Log 写入 MinIO
+    [sinks.minio_statement_log]
+    type = "aws_s3"
+    inputs = ["enrich_statement_log"]
+    encoding.codec = "json"
+    region = "us-east-1"
+    bucket = "tidb-logs"
+    key_prefix = "statement/{{ pod_name }}/%Y/%m/%d/%H/"
+    filename_time_format = "%Y%m%d%H%M%S"
+    filename_append_uuid = true
+    endpoint = "http://minio:9000"
+    compression = "gzip"
+    batch.max_bytes = 10485760
+    batch.timeout_secs = 60
+    buffer.type = "memory"
+    buffer.max_events = 5000
+    auth.access_key_id = "minioadmin"
+    auth.secret_access_key = "minioadmin"
+
+    # Slow Log 写入 MinIO
+    [sinks.minio_slow_log]
+    type = "aws_s3"
+    inputs = ["enrich_slow_log"]
+    encoding.codec = "json"
+    region = "us-east-1"
+    bucket = "tidb-logs"
+    key_prefix = "slowlog/{{ pod_name }}/%Y/%m/%d/%H/"
+    filename_time_format = "%Y%m%d%H%M%S"
+    filename_append_uuid = true
+    endpoint = "http://minio:9000"
+    compression = "gzip"
+    batch.max_bytes = 10485760
+    batch.timeout_secs = 60
+    buffer.type = "memory"
+    buffer.max_events = 1000
+    auth.access_key_id = "minioadmin"
+    auth.secret_access_key = "minioadmin"
+
+    # 内部指标
+    [sources.internal_metrics]
+    type = "internal_metrics"
+
+    [sinks.prometheus]
+    type = "prometheus_exporter"
+    inputs = ["internal_metrics"]
+    address = "0.0.0.0:9599"

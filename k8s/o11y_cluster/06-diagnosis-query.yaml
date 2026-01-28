@@ -1,0 +1,206 @@
+# Diagnosis Query - DuckDB 方式查询 MinIO 中的日志
+#
+# 功能:
+#   通过 DuckDB 直接查询 MinIO (S3 API) 中的 TiDB 日志数据
+#   提供 HTTP API 接口查询慢查询、Statement 日志等
+#
+# IDC 环境:
+#   Namespace: csn-testbed-tps-8002348-1-156
+#   MinIO: http://minio:9000 (内部访问)
+#   MinIO Web: http://<节点IP>:31901 (外部访问)
+#
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: diagnosis-query
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: diagnosis-query-config
+data:
+  # DuckDB 初始化脚本 - 配置 MinIO 访问
+  init_duckdb.sh: |
+    #!/bin/sh
+    set -e
+
+    echo "Initializing DuckDB for MinIO access..."
+
+    # MinIO 配置
+    MINIO_ENDPOINT="minio:9000"
+    MINIO_ACCESS_KEY="minioadmin"
+    MINIO_SECRET_KEY="minioadmin"
+    MINIO_BUCKET="tidb-logs"
+    REGION="us-east-1"
+
+    # DuckDB 数据库初始化 SQL
+    cat > /tmp/init.sql <<EOF
+    -- 安装必要的扩展
+    INSTALL httpfs;
+    LOAD httpfs;
+
+    -- 配置 S3 (MinIO 兼容)
+    SET s3_region='us-east-1';
+    SET s3_url_style='path';
+
+    -- 创建 MinIO Secret
+    CREATE SECRET minio_secret (
+        TYPE S3,
+        KEY_ID '${MINIO_ACCESS_KEY}',
+        SECRET '${MINIO_SECRET_KEY}',
+        REGION '${REGION}',
+        ENDPOINT 'http://${MINIO_ENDPOINT}'
+    );
+
+    -- 启用缓存
+    SET enable_object_cache=true;
+    SET enable_http_metadata_cache=true;
+
+    -- 测试连接 - 列出 bucket
+    SELECT * FROM glob('s3://tidb-logs/**/*');
+    EOF
+
+    echo "DuckDB initialization script created"
+    cat /tmp/init.sql
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: diagnosis-query-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: diagnosis-query
+  labels:
+    app: diagnosis-query
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: diagnosis-query
+  template:
+    metadata:
+      labels:
+        app: diagnosis-query
+    spec:
+      serviceAccountName: diagnosis-query
+      containers:
+      - name: diagnosis-query
+        # 使用官方 DuckDB 镜像作为基础 (包含 duckdb Go 驱动)
+        image: hub.pingcap.net/csn/diagnosis-query:latest
+        command:
+        - ./diagnosis-query
+        - -vendor=local
+        - -region=local
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: MINIO_ENDPOINT
+          value: "http://minio:9000"
+        - name: MINIO_ACCESS_KEY
+          value: "minioadmin"
+        - name: MINIO_SECRET_KEY
+          value: "minioadmin"
+        - name: MINIO_REGION
+          value: "us-east-1"
+        - name: MINIO_BUCKET
+          value: "tidb-logs"
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: AWS_REGION
+          value: "us-east-1"
+        - name: S3_ENDPOINT
+          value: "http://minio:9000"
+        - name: DUCKDB_MEMORY_PERCENTAGE
+          value: "60"
+        - name: POD_MEMORY_LIMITS_MB
+          value: "2048"
+        - name: BUCKET_NAME
+          value: "tidb-logs"
+        - name: TENANT_ID
+          value: "default"
+        - name: CLUSTER_ID
+          value: "tc"
+        ports:
+        - name: api
+          containerPort: 8081
+        - name: metrics
+          containerPort: 9090
+        volumeMounts:
+        - name: data
+          mountPath: /cache
+        - name: duckdb-cache
+          mountPath: /cache/duckdb
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: 1000m
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /metrics
+            port: 8081
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: data
+        emptyDir: {}
+      - name: duckdb-cache
+        emptyDir:
+          sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: diagnosis-query
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8081
+    targetPort: 8081
+    name: api
+  - port: 9090
+    targetPort: 9090
+    name: metrics
+  selector:
+    app: diagnosis-query
+---
+# NodePort Service for external access (optional)
+apiVersion: v1
+kind: Service
+metadata:
+  name: diagnosis-query-external
+spec:
+  type: NodePort
+  ports:
+  - port: 8081
+    targetPort: 8081
+    nodePort: 31881
+    name: api
+  selector:
+    app: diagnosis-query

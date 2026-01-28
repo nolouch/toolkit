@@ -1,0 +1,235 @@
+# Vector 日志采集器 - 使用 Deployment 单副本
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vector-logs
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vector-logs
+rules:
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["list", "watch", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vector-logs
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vector-logs
+subjects:
+- kind: ServiceAccount
+  name: vector-logs
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-logs-config
+data:
+  vector.yaml: |
+    data_dir: /vector-data-dir
+
+    api:
+      enabled: true
+      address: 0.0.0.0:8686
+      playground: false
+
+    sources:
+      # 通过 K8s API 采集 Pod 日志（不需要挂载 hostPath）
+      kubernetes_logs:
+        type: kubernetes_logs
+        # 只采集 tidb-operator 管理的 Pod
+        extra_label_selector: "app.kubernetes.io/managed-by=tidb-operator"
+        # 使用 API 模式读取日志，不依赖节点文件系统
+        self_node_name: ""
+
+      internal_metrics:
+        type: internal_metrics
+
+    transforms:
+      # 路由日志
+      route_logs:
+        type: route
+        inputs:
+          - kubernetes_logs
+        route:
+          slow_logs: .kubernetes.container_name == "slowlog"
+          general_logs: .kubernetes.container_name != "slowlog"
+
+      # 多行慢日志合并
+      multiline_slow_logs:
+        type: reduce
+        inputs:
+          - route_logs.slow_logs
+        starts_when:
+          type: vrl
+          source: |
+            res, err = starts_with(.message, "# Time: ")
+            if err != null {
+              false
+            } else {
+              res
+            }
+        merge_strategies:
+          message: concat_newline
+
+      # 添加元数据
+      enrich_general_logs:
+        type: remap
+        inputs:
+          - route_logs.general_logs
+        source: |
+          .cluster_id = "tc"
+          .log_type = "general"
+          .component = .kubernetes.pod_labels."app.kubernetes.io/component" ?? "unknown"
+
+      enrich_slow_logs:
+        type: remap
+        inputs:
+          - multiline_slow_logs
+        source: |
+          .cluster_id = "tc"
+          .log_type = "slow"
+          .component = "tidb"
+
+    sinks:
+      # 普通日志写入 MinIO
+      minio_general_logs:
+        type: aws_s3
+        inputs:
+          - enrich_general_logs
+        region: us-east-1
+        bucket: tidb-logs
+        key_prefix: "general/{{ component }}/%Y/%m/%d/"
+        filename_time_format: "%Y%m%d%H%M%S"
+        filename_append_uuid: true
+        endpoint: "http://minio:9000"
+        compression: gzip
+        batch:
+          max_bytes: 10485760
+          timeout_secs: 60
+        buffer:
+          type: disk
+          max_size: 536870912
+        encoding:
+          codec: json
+        auth:
+          access_key_id: "minioadmin"
+          secret_access_key: "minioadmin"
+
+      # 慢日志写入 MinIO
+      minio_slow_logs:
+        type: aws_s3
+        inputs:
+          - enrich_slow_logs
+        region: us-east-1
+        bucket: tidb-logs
+        key_prefix: "slowlog/%Y/%m/%d/"
+        filename_time_format: "%Y%m%d%H%M%S"
+        filename_append_uuid: true
+        endpoint: "http://minio:9000"
+        compression: gzip
+        batch:
+          max_bytes: 10485760
+          timeout_secs: 60
+        buffer:
+          type: disk
+          max_size: 536870912
+        encoding:
+          codec: json
+        auth:
+          access_key_id: "minioadmin"
+          secret_access_key: "minioadmin"
+
+      prometheus_exporter:
+        type: prometheus_exporter
+        inputs:
+          - internal_metrics
+        address: 0.0.0.0:9599
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vector-logs-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vector-logs
+  labels:
+    app: vector-logs
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vector-logs
+  template:
+    metadata:
+      labels:
+        app: vector-logs
+    spec:
+      serviceAccountName: vector-logs
+      containers:
+      - name: vector
+        image: timberio/vector:0.37.1-debian
+        env:
+        - name: VECTOR_CONFIG
+          value: /etc/vector/vector.yaml
+        ports:
+        - name: api
+          containerPort: 8686
+        - name: metrics
+          containerPort: 9599
+        volumeMounts:
+        - name: config
+          mountPath: /etc/vector
+        - name: data
+          mountPath: /vector-data-dir
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: api
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: api
+      volumes:
+      - name: config
+        configMap:
+          name: vector-logs-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: vector-logs-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-logs
+spec:
+  ports:
+  - port: 9599
+    name: metrics
+  - port: 8686
+    name: api
+  selector:
+    app: vector-logs

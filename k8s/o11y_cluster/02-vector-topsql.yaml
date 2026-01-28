@@ -1,0 +1,139 @@
+# Vector TopSQL 采集器
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vector-topsql-config
+data:
+  vector.toml: |
+    data_dir = "/vector-data-dir"
+
+    [api]
+    enabled = true
+    address = "0.0.0.0:8686"
+
+    # TopSQL source - 从 PD 采集 TopSQL 数据
+    [sources.topsql]
+    type = "topsql"
+    pd_address = "tc-pd:2379"
+    top_n = 100
+
+    # 添加元数据标签
+    [transforms.add_meta]
+    type = "remap"
+    inputs = ["topsql"]
+    source = '''
+    .labels.cluster_id = "tc"
+    .labels.namespace = "idc-test"
+    '''
+
+    # 写入 MinIO
+    [sinks.minio_topsql]
+    type = "aws_s3"
+    inputs = ["add_meta"]
+    encoding.codec = "json"
+    region = "us-east-1"
+    bucket = "topsql"
+    key_prefix = "data/%Y/%m/%d/%H/"
+    filename_time_format = "%Y%m%d%H%M%S"
+    filename_append_uuid = true
+    endpoint = "http://minio:9000"
+    batch.max_bytes = 10485760
+    batch.max_events = 1000
+    batch.timeout_secs = 60
+    buffer.type = "disk"
+    buffer.max_size = 536870912
+    buffer.when_full = "drop_newest"
+    auth.access_key_id = "minioadmin"
+    auth.secret_access_key = "minioadmin"
+
+    # 内部指标
+    [sources.self_metrics]
+    type = "internal_metrics"
+
+    [sinks.self_metrics_sink]
+    type = "prometheus_exporter"
+    inputs = ["self_metrics"]
+    address = "0.0.0.0:9599"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vector-topsql-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vector-topsql
+  labels:
+    app: vector-topsql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: vector-topsql
+  template:
+    metadata:
+      labels:
+        app: vector-topsql
+    spec:
+      containers:
+      - name: vector
+        # TiDB Cloud 定制 Vector 镜像，包含 topsql source
+        image: hub.pingcap.net/tidbcloud/vector:0.37.1-2d79df-debian-perl-nice
+        env:
+        - name: VECTOR_CONFIG
+          value: /etc/vector/vector.toml
+        ports:
+        - name: api
+          containerPort: 8686
+        - name: metrics
+          containerPort: 9599
+        volumeMounts:
+        - name: config
+          mountPath: /etc/vector
+        - name: data
+          mountPath: /vector-data-dir
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: api
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: api
+      volumes:
+      - name: config
+        configMap:
+          name: vector-topsql-config
+      - name: data
+        persistentVolumeClaim:
+          claimName: vector-topsql-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vector-topsql
+spec:
+  ports:
+  - port: 9599
+    name: metrics
+  - port: 8686
+    name: api
+  selector:
+    app: vector-topsql

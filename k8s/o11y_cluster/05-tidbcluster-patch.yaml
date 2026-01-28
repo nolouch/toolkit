@@ -1,0 +1,122 @@
+# TiDBCluster 补丁 - 添加 statement log 收集和 Vector sidecar
+#
+# IDC 环境:
+#   Namespace: csn-testbed-tps-8002348-1-156
+#   TiDBCluster 名称: tc
+#
+# 修改内容:
+#   1. 修改 TiDB config 启用 general log（记录所有 SQL）
+#   2. storageVolumes - 创建独立的日志存储卷
+#   3. separateSlowLog - 启用独立慢日志
+#   4. statementlog sidecar - tail statement 日志
+#   5. vector sidecar - 收集日志到 MinIO
+#
+# 使用方法:
+#   kubectl patch tc tc --type=merge --patch-file=05-tidbcluster-patch.yaml
+#
+# 注意: 应用此补丁后，TiDB Pod 会滚动重启
+
+spec:
+  tidb:
+    # 修改 TiDB 配置，启用 statement summary persistence
+    config: |
+      [log]
+        level = "info"
+        slow-query-file = "/var/log/auditlog/slowquery"
+        [log.file]
+          filename = "/var/lib/tidb/log/tidb.log"
+          max-backups = 100
+          max-size = 300
+
+      [instance]
+      # Enable statements persistence so that we can collect and analyze statements log outside the data plane.
+      # See: https://docs.pingcap.com/tidb/dev/statement-summary-tables#persist-statements-summary
+      tidb_stmt_summary_enable_persistent = true
+      tidb_stmt_summary_filename = "/var/log/auditlog/tidb-statements.log"
+      tidb_stmt_summary_file_max_days = 1
+      tidb_stmt_summary_file_max_size = 64
+      tidb_stmt_summary_file_max_backups = 5
+    # 启用独立慢日志
+    separateSlowLog: true
+    slowLogTailer:
+      limits:
+        cpu: 100m
+        memory: 50Mi
+      requests:
+        cpu: 20m
+        memory: 5Mi
+    # 创建独立的日志存储卷
+    storageVolumes:
+    - mountPath: /var/lib/tidb/log
+      name: log
+      storageClassName: local-path
+      storageSize: 100Gi
+    - mountPath: /tmp
+      name: default-tmp
+      storageClassName: local-path
+      storageSize: 10Gi
+    # 新增：审计日志存储卷（用于 statement log 和 slow log）
+    - mountPath: /var/log/auditlog
+      name: slowlog
+      storageClassName: local-path
+      storageSize: 30Gi
+    # 添加 sidecar 容器
+    additionalContainers:
+    # statementlog sidecar - tail statement 日志到 stdout
+    - name: statementlog
+      image: library/busybox:1.37.0-musl
+      command:
+      - sh
+      - -c
+      - touch /var/log/auditlog/tidb-statements.log; tail -n0 -F /var/log/auditlog/tidb-statements.log;
+      resources:
+        limits:
+          cpu: 100m
+          memory: 50Mi
+        requests:
+          cpu: "0"
+          memory: "0"
+      volumeMounts:
+      - mountPath: /var/log/auditlog
+        name: tidb-slowlog
+    # Vector sidecar - 收集日志到 MinIO
+    - name: vector
+      image: nolouch/vector:0.49-copr-1120-4-st-ng-debian
+      env:
+      - name: VECTOR_CONFIG
+        value: /etc/vector/vector.toml
+      - name: POD_NAME
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.name
+      - name: NAMESPACE
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      ports:
+      - name: vector-api
+        containerPort: 8686
+      - name: vector-metrics
+        containerPort: 9599
+      volumeMounts:
+      - name: vector-config
+        mountPath: /etc/vector
+      - name: tidb-slowlog
+        mountPath: /var/log/auditlog
+        readOnly: true
+      - name: vector-data
+        mountPath: /vector-data-dir
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 200m
+          memory: 256Mi
+    # 添加额外的 volumes
+    additionalVolumes:
+    - name: vector-config
+      configMap:
+        name: vector-sidecar-config
+    - name: vector-data
+      emptyDir: {}

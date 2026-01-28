@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coverage-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coverage-dev
+  template:
+    metadata:
+      labels:
+        app: coverage-dev
+    spec:
+      containers:
+      - name: dev
+        image: hub.pingcap.net/csn/statement-coverage-dev:latest
+        imagePullPolicy: Always
+        command: ["sleep", "infinity"]
+        env:
+        - name: PROMETHEUS_URL
+          value: "http://prometheus-k8s.monitoring:9090"
+        - name: MINIO_ENDPOINT
+          value: "http://minio:9000"
+        - name: MINIO_ACCESS_KEY
+          value: "minioadmin"
+        - name: MINIO_SECRET_KEY
+          value: "minioadmin"
+        - name: TENANT_ID
+          value: "default"
+        - name: CLUSTER_ID
+          value: "tc"
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: AWS_REGION
+          value: "us-east-1"
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coverage-dev
+spec:
+  selector:
+    app: coverage-dev
+  ports:
+  - name: ssh
+    port: 22
+    targetPort: 22
+  type: ClusterIP

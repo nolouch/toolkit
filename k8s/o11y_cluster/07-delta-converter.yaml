@@ -1,0 +1,45 @@
+# Delta Lake Converter - 将 JSON 日志转换为 Delta Lake 格式
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: delta-converter
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: delta-converter
+spec:
+  schedule: "*/10 * * * *"  # 每10分钟运行一次
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: delta-converter
+          restartPolicy: OnFailure
+          containers:
+          - name: converter
+            image: hub.pingcap.net/csn/delta-converter:latest
+            imagePullPolicy: Always
+            env:
+            - name: MINIO_ENDPOINT
+              value: "http://minio:9000"
+            - name: MINIO_ACCESS_KEY
+              value: "minioadmin"
+            - name: MINIO_SECRET_KEY
+              value: "minioadmin"
+            - name: BUCKET_NAME
+              value: "tidb-logs"
+            - name: TENANT_ID
+              value: "default"
+            - name: CLUSTER_ID
+              value: "tc"
+            resources:
+              requests:
+                cpu: 200m
+                memory: 256Mi
+              limits:
+                cpu: 1000m
+                memory: 1Gi
